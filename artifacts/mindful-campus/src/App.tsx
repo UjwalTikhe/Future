@@ -17,6 +17,7 @@ const queryClient = new QueryClient();
 
 type Mode = 'student' | 'admin';
 type Checkin = { id: string; date: string; mood: string; energy: string; stress: string; sleep: string; safety: string };
+type CommunityPost = { id: string; circle: string; author: string; avatar: string; title: string; body: string; replies: number; likes: number; created: string; liked?: boolean };
 type CaseItem = { id: string; anon: string; need: string; priority: 'Review soon' | 'Today' | 'Routine'; status: 'New' | 'In progress' | 'Connected'; created: string };
 type DemoState = {
   mode: Mode;
@@ -24,6 +25,8 @@ type DemoState = {
   checkins: Checkin[];
   savedActivities: string[];
   registeredEvent: boolean;
+  joinedCircles: string[];
+  communityPosts: CommunityPost[];
   peerRequested: boolean;
   consent: { trendStorage: boolean; tailoredSupport: boolean; contactPermission: boolean };
   cases: CaseItem[];
@@ -40,6 +43,12 @@ const initialState: DemoState = {
   ],
   savedActivities: ['walk'],
   registeredEvent: false,
+  joinedCircles: ['late-night-study', 'music-makers'],
+  communityPosts: [
+    { id: 'post-1', circle: 'Late Night Study', author: 'quietcomet', avatar: 'QC', title: 'What helps you start when the reading feels impossible?', body: 'I have been staring at the same page for an hour. Looking for tiny rituals that make starting feel less heavy.', replies: 18, likes: 42, created: '24 min ago' },
+    { id: 'post-2', circle: 'Music Makers', author: 'orbitingkeys', avatar: 'OK', title: 'Anyone up for a low-pressure jam this weekend?', body: 'No experience required. Just bring a song, a sketch, or curiosity. Thinking Saturday afternoon near the arts building.', replies: 9, likes: 27, created: '1 hr ago' },
+    { id: 'post-3', circle: 'First Year Corner', author: 'mossywindow', avatar: 'MW', title: 'A small list of places that feel calm between classes', body: 'The library terrace before noon, the north garden bench, and the second floor of the student union.', replies: 31, likes: 63, created: 'Yesterday' },
+  ],
   peerRequested: false,
   consent: { trendStorage: true, tailoredSupport: true, contactPermission: false },
   cases: [
@@ -383,6 +392,35 @@ function CommunityPage() {
   return <StudentShell><div className="animate-rise"><div className="eyebrow">Campus, at a human pace</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .55rem' }}>Find your people,<br />not another obligation.</h1><p className="muted" style={{ fontSize: '.8rem', lineHeight: 1.55 }}>Low-pressure gatherings and useful places to land. Browse quietly or show up.</p></div><div className="section-heading"><h2>Next on campus</h2><span className="mini-label">3 opportunities</span></div><div className="hero-card" style={{ background: 'hsl(27 61% 68%)', color: 'hsl(157 33% 21%)' }}><div className="pill" style={{ background: 'hsl(43 38% 95% / .45)', color: 'hsl(157 33% 21%)' }}><CalendarDays size={13} /> Today · 4:30 PM</div><h2 className="display" style={{ fontSize: '1.65rem', margin: '1rem 0 .45rem' }}>Well-being Hour</h2><p style={{ fontSize: '.78rem', lineHeight: 1.5, opacity: .78, maxWidth: 300, margin: 0 }}>Garden room · drop-in · hosted by student peer guides</p><button className="primary-button" style={{ marginTop: '1.15rem', background: 'hsl(157 33% 24%)', color: 'hsl(43 38% 95%)' }} onClick={register} data-testid="button-register-event">{state.registeredEvent ? <><Check size={14} /> Registered</> : <>Save my place <ArrowRight size={14} /></>}</button></div><div className="card-flat" style={{ marginTop: '.8rem', padding: '1rem' }}><div style={{ display: 'flex', gap: '.75rem' }}><div style={{ color: 'hsl(var(--primary))' }}><BookOpen size={18} /></div><div><div className="pill" style={{ background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}>Tomorrow · 12:15 PM</div><div style={{ fontFamily: 'var(--app-font-serif)', fontSize: '1.05rem', marginTop: '.55rem' }}>Study beside someone</div><p className="muted" style={{ fontSize: '.72rem', margin: '.25rem 0 .8rem' }}>Library east terrace · bring whatever you are working on</p><button className="ghost-button" style={{ paddingLeft: 0 }} onClick={() => notify('Event details saved for later')} data-testid="button-save-study-event">Save for later <ArrowRight size={14} /></button></div></div></div><div className="section-heading"><h2>People-powered support</h2></div><div className="card" style={{ padding: '1rem' }}><div style={{ display: 'flex', gap: '.7rem' }}><div style={{ width: 38, height: 38, display: 'grid', placeItems: 'center', borderRadius: '.7rem', background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}><HeartHandshake size={18} /></div><div><strong style={{ fontSize: '.84rem' }}>Peer guides are students too.</strong><p className="muted" style={{ fontSize: '.72rem', lineHeight: 1.5, margin: '.3rem 0 0' }}>Ask for a listening ear, help finding campus services, or just a place to start.</p></div></div></div></StudentShell>;
 }
 
+function CommunityHubPage() {
+  const { state, updateState, notify } = useApp();
+  const [activeCircle, setActiveCircle] = useState('All circles');
+  const [draft, setDraft] = useState('');
+  const circles = [
+    { id: 'late-night-study', name: 'Late Night Study', members: '428 members', color: 'hsl(var(--secondary))' },
+    { id: 'music-makers', name: 'Music Makers', members: '186 members', color: 'hsl(var(--accent) / .38)' },
+    { id: 'first-year-corner', name: 'First Year Corner', members: '312 members', color: 'hsl(197 35% 87%)' },
+    { id: 'creative-lab', name: 'Creative Lab', members: '94 members', color: 'hsl(15 60% 88%)' },
+  ];
+  const visiblePosts = activeCircle === 'All circles' ? state.communityPosts : state.communityPosts.filter((post) => post.circle === activeCircle);
+  const toggleCircle = (id: string) => {
+    const joined = state.joinedCircles.includes(id);
+    updateState({ joinedCircles: joined ? state.joinedCircles.filter((circle) => circle !== id) : [...state.joinedCircles, id] });
+    notify(joined ? 'Circle left' : 'Circle joined');
+  };
+  const publish = () => {
+    const body = draft.trim();
+    if (!body) return;
+    const post: CommunityPost = { id: `post-${Date.now()}`, circle: activeCircle === 'All circles' ? 'Late Night Study' : activeCircle, author: 'sunlitfern', avatar: 'SF', title: 'A thought from the community', body, replies: 0, likes: 0, created: 'Just now' };
+    updateState({ communityPosts: [post, ...state.communityPosts] });
+    setDraft('');
+    notify('Posted anonymously to the community');
+  };
+  const likePost = (id: string) => updateState({ communityPosts: state.communityPosts.map((post) => post.id === id ? { ...post, likes: post.likes + (post.liked ? -1 : 1), liked: !post.liked } : post) });
+
+  return <StudentShell><div className="community-layout animate-rise"><div className="community-intro"><div><div className="eyebrow">Campus community</div><h1 className="display" style={{ fontSize: '2.1rem', margin: '.35rem 0 .5rem' }}>Find your people,<br />at your own pace.</h1><p className="muted" style={{ fontSize: '.8rem', lineHeight: 1.55, maxWidth: 420 }}>Pseudonymous spaces for questions, interests, ideas, and the small things that make campus feel more like yours.</p></div><div className="community-privacy"><ShieldCheck size={16} /><span>Only your chosen username is public.</span></div></div><div className="community-compose card"><div className="community-avatar">SF</div><div style={{ flex: 1 }}><textarea className="input-field community-textarea" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Share something with your circles..." aria-label="Write a community post" data-testid="input-community-post" /><div className="community-compose-footer"><span className="mini-label">Posting as <strong style={{ color: 'hsl(var(--primary))' }}>sunlitfern</strong></span><button className="primary-button" onClick={publish} disabled={!draft.trim()} data-testid="button-publish-post"><Plus size={14} /> Post anonymously</button></div></div></div><div className="community-columns"><aside className="community-sidebar"><div className="community-sidebar-heading"><span className="eyebrow">Your circles</span><span className="mini-label">{state.joinedCircles.length}</span></div><button className={`circle-filter ${activeCircle === 'All circles' ? 'active' : ''}`} onClick={() => setActiveCircle('All circles')}><UsersRound size={16} /><span>All circles</span></button>{circles.map((circle) => <button key={circle.id} className={`circle-filter ${activeCircle === circle.name ? 'active' : ''}`} onClick={() => setActiveCircle(circle.name)}><span className="circle-icon" style={{ background: circle.color }}>{circle.name.slice(0, 1)}</span><span>{circle.name}</span>{state.joinedCircles.includes(circle.id) && <Check size={13} style={{ marginLeft: 'auto' }} />}</button>)}<div className="community-safety"><LockKeyhole size={15} /><strong>Community promise</strong><p>Be curious, protect privacy, and report harm. Real names stay out of public posts.</p></div></aside><main className="community-feed"><div className="community-feed-heading"><div><div className="eyebrow">{activeCircle}</div><h2 className="display">Latest conversations</h2></div><span className="pill" style={{ background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}><MessageCircle size={12} /> {visiblePosts.length} threads</span></div>{visiblePosts.map((post, index) => <article className="community-post card" key={post.id} style={{ animationDelay: `${index * 50}ms` }} data-testid={`card-community-post-${post.id}`}><div className="post-meta"><div className="community-avatar" style={{ background: index % 2 ? 'hsl(var(--accent) / .45)' : 'hsl(var(--secondary))' }}>{post.avatar}</div><div style={{ flex: 1 }}><strong className="post-author">{post.author}</strong><span className="muted post-time"> in {post.circle} · {post.created}</span></div><button className="icon-button small-icon" aria-label={`Report post by ${post.author}`} onClick={() => notify('Thanks. This post was sent to the community team.')}><MoreHorizontal size={15} /></button></div><h3>{post.title}</h3><p>{post.body}</p><div className="post-actions"><button className={`post-action ${post.liked ? 'liked' : ''}`} onClick={() => likePost(post.id)} data-testid={`button-like-${post.id}`}><HeartHandshake size={15} /> {post.likes}</button><button className="post-action" onClick={() => notify('Replies will open in the next community release')}><MessageCircle size={15} /> {post.replies} replies</button><button className="post-action post-report" onClick={() => notify('Thanks. This post was sent to the community team.')}><ShieldCheck size={14} /> Report</button></div></article>)}{!visiblePosts.length && <div className="empty-state card"><Sprout size={24} style={{ color: 'hsl(var(--primary))' }} /><div style={{ marginTop: '.6rem' }}>This circle is ready for its first conversation.</div></div>}</main></div><div className="section-heading"><h2>Explore more circles</h2><span className="mini-label">Choose what fits</span></div><div className="circle-grid">{circles.map((circle) => { const joined = state.joinedCircles.includes(circle.id); return <div className="circle-card card-flat" key={circle.id}><div className="circle-card-icon" style={{ background: circle.color }}>{circle.name.slice(0, 1)}</div><div style={{ flex: 1 }}><strong>{circle.name}</strong><div className="muted" style={{ fontSize: '.68rem', marginTop: '.2rem' }}>{circle.members}</div></div><button className={joined ? 'icon-button small-icon' : 'secondary-button'} onClick={() => toggleCircle(circle.id)} aria-label={joined ? `Leave ${circle.name}` : `Join ${circle.name}`} data-testid={`button-join-${circle.id}`}>{joined ? <Check size={15} /> : <Plus size={15} />}{!joined && <span>Join</span>}</button></div>; })}</div></div></StudentShell>;
+}
+
 function SupportPage() {
   const { state, updateState, notify } = useApp();
   const [, navigate] = useLocation();
@@ -458,7 +496,7 @@ function AdminSecurity() {
 }
 
 function Router() {
-  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityPage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin/login" component={AdminLogin} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
+  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityHubPage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin/login" component={AdminLogin} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {

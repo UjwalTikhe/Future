@@ -113,9 +113,37 @@ http://localhost:3001/api/healthz
 ## Important MVP Notes
 
 - The current staff session store lives in backend memory. Restarting the API signs staff out.
-- Before public deployment, move staff users and sessions into PostgreSQL or connect a university identity provider.
+- Before a real public launch, move staff users and sessions into PostgreSQL or connect a university identity provider.
 - Never commit a real `.env` file or real passwords. `.env.example` is safe to commit.
 - The backend requires a real `ADMIN_EMAIL` and `ADMIN_PASSWORD` every time it starts.
+
+## Deploy For Phone Access
+
+The included `Dockerfile` and `render.yaml` deploy the frontend and backend as one web service. After deployment, you receive one URL that works from your phone without a laptop running.
+
+### Render deployment
+
+1. Create an account at https://render.com.
+2. Choose **New +** and then **Blueprint**.
+3. Connect GitHub and select `UjwalTikhe/Future`.
+4. Render reads `render.yaml` and creates the `mindful-campus` web service.
+5. In the service environment settings, set:
+	- `ADMIN_EMAIL`: your staff email
+	- `ADMIN_PASSWORD`: a long private password
+	- `WEB_ORIGIN`: the Render URL, for example `https://mindful-campus.onrender.com`
+6. Deploy and wait for the build to finish.
+7. Open the Render URL on your phone.
+
+Test these URLs after deployment:
+
+```text
+https://YOUR-APP.onrender.com
+https://YOUR-APP.onrender.com/community
+https://YOUR-APP.onrender.com/admin
+https://YOUR-APP.onrender.com/api/healthz
+```
+
+The free Render service may sleep when unused. The first request after sleep can take a little longer. The app currently keeps sessions in memory, so a service restart signs staff out.
 
 ## GitHub
 
@@ -125,10 +153,10 @@ The intended repository is:
 https://github.com/UjwalTikhe/Future
 ```
 
-This local project is not connected to that GitHub repository yet. Before pushing, verify the repository is empty and that GitHub authentication is available on your laptop. Then use:
+This project is already connected to that GitHub repository. Push future changes with:
 
 ```powershell
-git remote add origin https://github.com/UjwalTikhe/Future.git
-git branch -M main
-git push -u origin main
+git add -A
+git commit -m "Describe the change"
+git push
 ```
