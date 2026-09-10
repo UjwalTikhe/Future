@@ -149,6 +149,15 @@ https://YOUR-APP.onrender.com/api/healthz
 
 The free Render service may sleep when unused. The first request after sleep can take a little longer. Staff sessions remain process-local, so a web service restart signs staff out; community rooms and messages persist in Postgres.
 
+### Install it on your phone
+
+The deployed website is also an installable PWA. Open the Render URL in your phone browser:
+
+- Android Chrome: use the **Install on your phone** button or the browser menu's **Install app** option.
+- iPhone Safari: tap **Share**, then **Add to Home Screen**.
+
+The installed app opens without browser chrome and uses the same account and secure session as the website. This is the supported phone app download path; it does not require an APK or laptop.
+
 ## GitHub
 
 The intended repository is:

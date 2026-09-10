@@ -285,9 +285,12 @@
 .private-room-gate p { max-width: 310px; color: hsl(var(--muted-foreground)); font-size: .76rem; line-height: 1.5; }
 .community-auth-page { display: grid; gap: 1.2rem; padding: 1rem 0 2rem; }
 .community-auth-copy h1 { margin: .35rem 0 .55rem; font-size: 2rem; line-height: 1.04; }
+.community-auth-copy::before { content: ''; display: block; height: 130px; margin-bottom: 1rem; border-radius: 1rem; background: linear-gradient(180deg, hsl(157 33% 24% / .08), hsl(157 33% 24% / .22)), url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=82') center / cover; box-shadow: var(--shadow-card); }
 .community-auth-copy > p { max-width: 370px; font-size: .78rem; line-height: 1.55; }
 .auth-trust { display: grid; gap: .5rem; margin-top: 1.2rem; }
 .auth-trust div { display: flex; align-items: center; gap: .5rem; color: hsl(var(--primary)); font-size: .7rem; font-weight: 700; }
+.install-app-button { display: inline-flex; align-items: center; gap: .45rem; width: fit-content; margin-top: 1rem; padding: .55rem .72rem; border: 1px solid hsl(var(--primary) / .24); border-radius: .65rem; background: hsl(var(--secondary) / .6); color: hsl(var(--primary)); font: inherit; font-size: .7rem; font-weight: 800; cursor: pointer; }
+.install-app-button:hover { background: hsl(var(--secondary)); }
 .community-auth-form { display: grid; gap: .8rem; padding: 1rem; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem; padding: .2rem; margin-bottom: .35rem; border-radius: .65rem; background: hsl(var(--muted)); }
 .auth-tabs button { padding: .55rem; border: 0; border-radius: .5rem; background: transparent; color: hsl(var(--muted-foreground)); font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }

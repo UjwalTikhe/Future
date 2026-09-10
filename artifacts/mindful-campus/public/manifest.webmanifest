@@ -1,0 +1,14 @@
+{
+  "name": "Mindful Campus Initiative",
+  "short_name": "Mindful Campus",
+  "description": "Private campus well-being, support, and student community spaces.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f6ef",
+  "theme_color": "#2f6b54",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
