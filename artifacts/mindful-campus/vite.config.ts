@@ -68,6 +68,9 @@ export default defineConfig({
     port,
     strictPort: true,
     host: '0.0.0.0',
+    proxy: {
+      '/api': process.env.API_ORIGIN ?? 'http://localhost:3001',
+    },
     allowedHosts: true,
     fs: {
       strict: true,

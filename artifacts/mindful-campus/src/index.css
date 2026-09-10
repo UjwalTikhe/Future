@@ -108,6 +108,20 @@
 .loading-dash { animation: soft-pulse 1.2s ease-in-out infinite; }
 
 .app-frame { min-height: 100dvh; background: hsl(var(--background)); }
+.admin-login-page { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); background: linear-gradient(135deg, hsl(42 36% 96%) 0%, hsl(155 24% 88% / .66) 100%); }
+.admin-login-panel { width: min(100%, 560px); padding: clamp(1.5rem, 6vw, 4.5rem); justify-self: end; }
+.admin-login-brand { display: inline-flex; color: inherit; text-decoration: none; }
+.admin-login-aside { display: flex; flex-direction: column; justify-content: center; padding: clamp(2rem, 6vw, 6rem); background: hsl(157 33% 24%); color: hsl(43 38% 95%); position: relative; overflow: hidden; }
+.admin-login-aside::after { content: ''; position: absolute; width: 420px; height: 420px; border: 1px solid hsl(43 38% 95% / .18); border-radius: 50%; right: -170px; bottom: -160px; box-shadow: 0 0 0 32px hsl(43 38% 95% / .05), 0 0 0 66px hsl(43 38% 95% / .035); }
+.admin-login-aside > * { position: relative; z-index: 1; }
+.admin-login-aside h2 { font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.04; margin: .65rem 0 2rem; }
+.login-aside-list { display: grid; gap: .9rem; }
+.login-aside-list div { display: flex; align-items: center; gap: .7rem; font-size: .82rem; color: hsl(43 38% 95% / .78); }
+.login-aside-list svg { color: hsl(29 76% 72%); }
+.field-label { display: grid; gap: .4rem; color: hsl(var(--foreground)); font-size: .74rem; font-weight: 700; }
+.field-label .input-field { margin-top: .05rem; min-height: 3rem; background: hsl(var(--card) / .72); }
+.form-error { padding: .7rem .8rem; border: 1px solid hsl(var(--destructive) / .25); border-radius: .7rem; background: hsl(var(--destructive) / .08); color: hsl(var(--destructive)); font-size: .73rem; }
+.admin-login-note { display: flex; align-items: start; gap: .5rem; margin-top: 1.2rem; color: hsl(var(--muted-foreground)); font-size: .68rem; line-height: 1.5; }
 .app-shell { width: 100%; max-width: 1220px; margin: 0 auto; min-height: 100dvh; display: flex; }
 .student-shell { width: 100%; max-width: 520px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: hsl(var(--background)); }
 .topbar { position: sticky; top: 0; z-index: 30; backdrop-filter: blur(16px); background: hsl(var(--background) / .88); border-bottom: 1px solid hsl(var(--border) / .65); }
@@ -131,7 +145,7 @@
 .section-heading a { color: hsl(var(--primary)); font-weight: 700; font-size: .77rem; }
 .stat-number { font-family: var(--app-font-serif); font-size: 2rem; line-height: 1; letter-spacing: -.05em; }
 .mini-label { font-size: .7rem; color: hsl(var(--muted-foreground)); }
-.bottom-nav { position: fixed; bottom: 0; left: 50%; z-index: 40; width: min(100%, 520px); transform: translateX(-50%); padding: .55rem .7rem max(.55rem, env(safe-area-inset-bottom)); background: hsl(var(--card) / .94); backdrop-filter: blur(18px); border-top: 1px solid hsl(var(--border)); display: grid; grid-template-columns: repeat(5, 1fr); }
+.bottom-nav { position: fixed; bottom: 0; left: 50%; z-index: 40; width: min(100%, 520px); transform: translateX(-50%); padding: .55rem .7rem max(.55rem, env(safe-area-inset-bottom)); background: hsl(var(--card) / .94); backdrop-filter: blur(18px); border-top: 1px solid hsl(var(--border)); display: grid; grid-template-columns: repeat(6, 1fr); }
 .bottom-nav a { display: flex; flex-direction: column; gap: .22rem; align-items: center; color: hsl(var(--muted-foreground)); font-size: .62rem; font-weight: 700; text-decoration: none; padding: .3rem; }
 .bottom-nav a.active { color: hsl(var(--primary)); }
 .bottom-nav a svg { width: 1.18rem; height: 1.18rem; }
@@ -184,6 +198,10 @@
   .student-shell .topbar { position: sticky; }
 }
 @media (max-width: 759px) {
+  .admin-login-page { display: block; }
+  .admin-login-panel { width: auto; padding: 1.35rem 1rem 2.3rem; }
+  .admin-login-aside { min-height: 260px; padding: 2rem 1rem; }
+  .admin-login-aside h2 { font-size: 2rem; }
   .side-rail { display: none; }
   .admin-header { padding-top: .85rem; padding-bottom: .85rem; }
   .admin-header .mode-switch button { padding: .44rem .52rem; }

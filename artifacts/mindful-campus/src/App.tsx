@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,15 +11,16 @@ import {
   MoreHorizontal, Network, Phone, Plus, RefreshCw, Search, Settings2, ShieldCheck,
   Sparkles, Sprout, SunMedium, TrendingUp, UserRound, UsersRound, Wind, type LucideIcon
 } from 'lucide-react';
-import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Link, Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
 
 type Mode = 'student' | 'admin';
-type Checkin = { id: string; date: string; mood: string; energy: string; safety: string };
+type Checkin = { id: string; date: string; mood: string; energy: string; stress: string; sleep: string; safety: string };
 type CaseItem = { id: string; anon: string; need: string; priority: 'Review soon' | 'Today' | 'Routine'; status: 'New' | 'In progress' | 'Connected'; created: string };
 type DemoState = {
   mode: Mode;
+  adminAuthenticated: boolean;
   checkins: Checkin[];
   savedActivities: string[];
   registeredEvent: boolean;
@@ -31,10 +32,11 @@ type DemoState = {
 
 const initialState: DemoState = {
   mode: 'student',
+  adminAuthenticated: false,
   checkins: [
-    { id: 'sample-1', date: 'Mon', mood: 'Steady', energy: 'Some energy', safety: 'No' },
-    { id: 'sample-2', date: 'Wed', mood: 'A little low', energy: 'A little low', safety: 'No' },
-    { id: 'sample-3', date: 'Fri', mood: 'Okay', energy: 'Some energy', safety: 'No' },
+    { id: 'sample-1', date: 'Mon', mood: 'Steady', energy: 'Some energy', stress: 'Manageable', sleep: 'Restful', safety: 'No' },
+    { id: 'sample-2', date: 'Wed', mood: 'A little low', energy: 'A little low', stress: 'A lot', sleep: 'Uneven', safety: 'No' },
+    { id: 'sample-3', date: 'Fri', mood: 'Okay', energy: 'Some energy', stress: 'Some', sleep: 'Uneven', safety: 'No' },
   ],
   savedActivities: ['walk'],
   registeredEvent: false,
@@ -65,18 +67,22 @@ function useApp() {
 function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DemoState>(initialState);
   const [ready, setReady] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const stored = localStorage.getItem('mci-demo-state-v1');
     if (stored) {
-      try { setState({ ...initialState, ...JSON.parse(stored) }); } catch { setState(initialState); }
+      try { setState({ ...initialState, ...JSON.parse(stored), adminAuthenticated: false }); } catch { setState(initialState); }
     }
-    setTimeout(() => setReady(true), 280);
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((response) => { if (response.ok) setState((current) => ({ ...current, adminAuthenticated: true, mode: 'admin' })); })
+      .catch(() => undefined)
+      .finally(() => { setAuthChecked(true); setTimeout(() => setReady(true), 280); });
   }, []);
 
   useEffect(() => {
-    if (ready) localStorage.setItem('mci-demo-state-v1', JSON.stringify(state));
+    if (ready) localStorage.setItem('mci-demo-state-v1', JSON.stringify({ ...state, adminAuthenticated: false }));
   }, [state, ready]);
 
   useEffect(() => {
@@ -86,7 +92,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   }, [notice]);
 
   const updateState = (updates: Partial<DemoState>) => setState((current) => ({ ...current, ...updates }));
-  if (!ready) return <LoadingScreen />;
+  if (!ready || !authChecked) return <LoadingScreen />;
   return (
     <AppContext.Provider value={{ state, updateState, notify: setNotice }}>
       {children}
@@ -121,20 +127,41 @@ function LogoMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function ModeSwitch() {
+function AdminLogin() {
   const { state, updateState, notify } = useApp();
   const [, navigate] = useLocation();
-  const switchMode = (mode: Mode) => {
-    updateState({ mode });
-    navigate(mode === 'admin' ? '/admin' : '/');
-    notify(mode === 'admin' ? 'Admin demo view enabled' : 'Student demo view enabled');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (state.adminAuthenticated) navigate('/admin');
+  }, [state.adminAuthenticated, navigate]);
+
+  const signIn = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email.trim() || password.length < 8) {
+      setError('Enter your staff email and an 8-character password.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth/login', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(result.message ?? 'Unable to sign in right now.'); return; }
+      updateState({ adminAuthenticated: true, mode: 'admin' });
+      notify('Staff workspace unlocked');
+      navigate('/admin');
+    } catch {
+      setError('The staff service is unavailable. Start the API server and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
-  return (
-    <div className="mode-switch" aria-label="Demo mode">
-      <button className={state.mode === 'student' ? 'active' : ''} onClick={() => switchMode('student')} data-testid="button-mode-student">Student</button>
-      <button className={state.mode === 'admin' ? 'active' : ''} onClick={() => switchMode('admin')} data-testid="button-mode-admin">Admin demo</button>
-    </div>
-  );
+
+  return <div className="admin-login-page"><div className="admin-login-panel animate-rise"><Link href="/" className="admin-login-brand" data-testid="link-login-home"><LogoMark /></Link><div className="eyebrow" style={{ marginTop: '2.6rem' }}>Staff access</div><h1 className="display" style={{ fontSize: '2.6rem', lineHeight: 1.02, margin: '.45rem 0 .65rem' }}>Care operations,<br />kept private.</h1><p className="muted" style={{ fontSize: '.82rem', lineHeight: 1.6, maxWidth: 390 }}>Sign in to manage support requests, campus programs, and privacy controls. This space is separate from the student experience.</p><form onSubmit={signIn} style={{ display: 'grid', gap: '.85rem', marginTop: '1.6rem' }}><label className="field-label" htmlFor="admin-email">Staff email<input id="admin-email" className="input-field" type="email" autoComplete="username" placeholder="you@university.edu" value={email} onChange={(event) => setEmail(event.target.value)} data-testid="input-admin-email" /></label><label className="field-label" htmlFor="admin-password">Password<input id="admin-password" className="input-field" type="password" autoComplete="current-password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} data-testid="input-admin-password" /></label>{error && <div className="form-error" role="alert">{error}</div>}<button className="primary-button" type="submit" disabled={submitting} style={{ marginTop: '.35rem', minHeight: '3rem' }} data-testid="button-admin-sign-in">{submitting ? 'Checking access…' : <>Open staff workspace <ArrowRight size={15} /></>}</button></form><div className="admin-login-note"><LockKeyhole size={15} /><span>Authentication is handled by the MCI server session.</span></div></div><div className="admin-login-aside"><div className="eyebrow">Mindful Campus Initiative</div><h2 className="display">Good operations make<br />care easier to reach.</h2><div className="login-aside-list"><div><ShieldCheck size={18} /><span>Anonymized by default</span></div><div><MessageCircle size={18} /><span>Human-led support queues</span></div><div><Network size={18} /><span>Auditable program changes</span></div></div></div></div>;
 }
 
 function StudentTopbar() {
@@ -143,7 +170,6 @@ function StudentTopbar() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.7rem' }}>
         <Link href="/" data-testid="link-logo-home" style={{ color: 'inherit', textDecoration: 'none' }}><LogoMark compact /></Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.45rem' }}>
-          <ModeSwitch />
           <Link href="/profile" className="icon-button" aria-label="Open profile and privacy" data-testid="link-profile"><UserRound size={16} /></Link>
         </div>
       </div>
@@ -153,6 +179,7 @@ function StudentTopbar() {
 
 const studentNav = [
   { href: '/', label: 'Home', icon: Home },
+  { href: '/check-in', label: 'Check-in', icon: ClipboardCheck },
   { href: '/wellness', label: 'Wellness', icon: Leaf },
   { href: '/community', label: 'Community', icon: UsersRound },
   { href: '/support', label: 'Support', icon: HeartHandshake },
@@ -193,13 +220,17 @@ function AdminRail() {
       <div style={{ marginTop: 'auto', padding: '.9rem .85rem', borderRadius: '.9rem', background: 'hsl(var(--secondary) / .65)' }}>
         <LockKeyhole size={16} style={{ color: 'hsl(var(--primary))', marginBottom: '.5rem' }} />
         <div style={{ fontSize: '.75rem', fontWeight: 700 }}>Protected workspace</div>
-        <p className="muted" style={{ fontSize: '.68rem', lineHeight: 1.5, margin: '.3rem 0 0' }}>Demo data only. No individual diagnosis or surveillance.</p>
+        <p className="muted" style={{ fontSize: '.68rem', lineHeight: 1.5, margin: '.3rem 0 0' }}>Anonymized signals only. No individual diagnosis or surveillance.</p>
       </div>
     </aside>
   );
 }
 
 function AdminShell({ children }: { children: ReactNode }) {
+  const { state, updateState, notify } = useApp();
+  const [, navigate] = useLocation();
+  if (!state.adminAuthenticated) return <Redirect to="/admin/login" />;
+  const signOut = async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); updateState({ adminAuthenticated: false, mode: 'student' }); notify('Staff workspace locked'); navigate('/'); };
   return (
     <div className="app-shell">
       <AdminRail />
@@ -209,7 +240,7 @@ function AdminShell({ children }: { children: ReactNode }) {
             <div className="eyebrow">MCI / protected workspace</div>
             <div style={{ fontSize: '.83rem', fontWeight: 700, marginTop: '.25rem' }}>University well-being operations</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem' }}><ModeSwitch /><button className="icon-button" aria-label="Open admin settings" data-testid="button-admin-settings"><Settings2 size={16} /></button></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem' }}><Link href="/" className="secondary-button" style={{ textDecoration: 'none', minHeight: '2.35rem', padding: '.5rem .7rem', fontSize: '.72rem' }} data-testid="link-student-view"><Home size={14} /> Student view</Link><button className="icon-button" aria-label="Open admin settings" data-testid="button-admin-settings"><Settings2 size={16} /></button><button className="icon-button" aria-label="Sign out of staff workspace" onClick={signOut} data-testid="button-admin-sign-out"><LogOut size={16} /></button></div>
         </header>
         {children}
       </div>
@@ -227,13 +258,24 @@ function StudentHome() {
       <div className="animate-rise">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.25rem' }}>
           <div><div className="eyebrow">Friday, 18 October</div><h1 className="display" style={{ fontSize: '2.15rem', margin: '.35rem 0 0' }}>A small check-in<br />can change the day.</h1></div>
-          <div className="pill" style={{ background: 'hsl(var(--accent) / .34)', color: 'hsl(var(--accent-foreground))' }}><SunMedium size={13} /> 12° campus</div>
+           <div className="pill" style={{ background: 'hsl(var(--accent) / .34)', color: 'hsl(var(--accent-foreground))' }}><SunMedium size={13} /> 12° campus</div>
         </div>
         <div className="hero-card">
           <div className="pill" style={{ background: 'hsl(43 38% 95% / .13)', color: 'hsl(43 38% 95%)' }}><Sparkles size={13} /> Your space, your pace</div>
           <h2 className="display" style={{ fontSize: '1.65rem', lineHeight: 1.08, maxWidth: 290, margin: '1.2rem 0 .55rem' }}>{completedToday ? 'You made space for yourself today.' : 'How is your inner weather today?'}</h2>
           <p style={{ color: 'hsl(43 38% 95% / .7)', fontSize: '.78rem', maxWidth: 290, lineHeight: 1.55, margin: '0 0 1.15rem' }}>{completedToday ? 'Your check-in is private to you. Notice what feels useful, then keep moving.' : 'A two-minute, private pause to notice what is here. No labels, no judgment.'}</p>
           <button className="primary-button" onClick={() => navigate('/check-in')} data-testid="button-start-checkin">{completedToday ? 'View today’s check-in' : 'Start a check-in'} <ArrowRight size={15} /></button>
+        </div>
+      </div>
+
+      <div className="card-flat animate-rise animate-rise-1" style={{ padding: '1rem', marginTop: '.85rem' }} data-testid="card-support-priority">
+        <div style={{ display: 'flex', alignItems: 'start', gap: '.7rem' }}>
+          <ShieldCheck size={18} style={{ color: 'hsl(var(--primary))', marginTop: '.1rem' }} />
+          <div>
+            <div className="eyebrow">Your support level</div>
+            <div style={{ fontWeight: 700, fontSize: '.84rem', marginTop: '.2rem' }}>General well-being support</div>
+            <p className="muted" style={{ fontSize: '.71rem', lineHeight: 1.5, margin: '.3rem 0 0' }}>A non-diagnostic view of recent check-ins. It is a prompt for care, not a medical conclusion.</p>
+          </div>
         </div>
       </div>
 
@@ -269,38 +311,43 @@ const moodChoices = [
   ['Good', 'A little lightness'], ['Okay', 'Getting through it'], ['A little low', 'More weight than usual'], ['Hard', 'Today feels difficult'],
 ];
 const energyChoices = [['Full', 'I have some fuel'], ['Some energy', 'Enough for a few things'], ['Low', 'Running on reserve'], ['Drained', 'Very little in the tank']];
+const stressChoices = [['Manageable', 'Within my capacity'], ['Some', 'Taking more effort'], ['A lot', 'Hard to put down'], ['Overwhelming', 'I need support now']];
+const sleepChoices = [['Restful', 'Mostly restorative'], ['Uneven', 'Some disruption'], ['Poor', 'Hard to recharge'], ['Very poor', 'Barely resting']];
 
 function CheckInPage() {
   const { state, updateState, notify } = useApp();
-  const [, navigate] = useLocation();
   const [step, setStep] = useState(1);
   const [mood, setMood] = useState('');
   const [energy, setEnergy] = useState('');
+  const [stress, setStress] = useState('');
+  const [sleep, setSleep] = useState('');
   const [safety, setSafety] = useState('');
   const [done, setDone] = useState(false);
   const today = state.checkins[state.checkins.length - 1]?.date === 'Today';
 
   const complete = () => {
-    if (!mood || !energy || !safety) return;
-    const entry: Checkin = { id: `checkin-${Date.now()}`, date: 'Today', mood, energy, safety };
+    if (!mood || !energy || !stress || !sleep || !safety) return;
+    const entry: Checkin = { id: `checkin-${Date.now()}`, date: 'Today', mood, energy, stress, sleep, safety };
     updateState({ checkins: [...state.checkins.filter((item) => item.date !== 'Today'), entry] });
     setDone(true);
     notify('Check-in saved privately');
   };
-  if (done) return <StudentShell><div className="animate-rise" style={{ paddingTop: '2rem' }}><div style={{ width: 58, height: 58, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))', marginBottom: '1.2rem' }}><Check size={28} /></div><div className="eyebrow">Saved to your space</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .6rem' }}>Thank you for<br />checking in.</h1><p className="muted" style={{ fontSize: '.84rem', lineHeight: 1.6, maxWidth: 340 }}>This is a moment of noticing, not a verdict. You can look back at your patterns whenever it feels useful.</p>{safety === 'Yes' && <div className="alert-card" style={{ marginTop: '1.3rem' }}><div style={{ display: 'flex', gap: '.65rem' }}><Phone size={18} /><div><strong style={{ fontSize: '.85rem' }}>You do not have to hold this alone.</strong><p style={{ fontSize: '.74rem', lineHeight: 1.5, margin: '.35rem 0 .8rem' }}>Because you marked that you may not feel safe, immediate human support is the next useful step. MCI is not an emergency service.</p><Link href="/support" className="secondary-button" style={{ textDecoration: 'none' }} data-testid="link-crisis-support">Open immediate support options <ArrowRight size={14} /></Link></div></div></div>}<div style={{ display: 'flex', gap: '.65rem', marginTop: '1.6rem' }}><Link href="/" className="primary-button" style={{ textDecoration: 'none' }} data-testid="link-checkin-home">Back home</Link><Link href="/wellness" className="secondary-button" style={{ textDecoration: 'none' }} data-testid="link-checkin-wellness">Find a next step</Link></div></div></StudentShell>;
+  if (done) return <StudentShell><div className="animate-rise" style={{ paddingTop: '2rem' }}><div style={{ width: 58, height: 58, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))', marginBottom: '1.2rem' }}><Check size={28} /></div><div className="eyebrow">Saved to your space</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .6rem' }}>Thank you for<br />checking in.</h1><p className="muted" style={{ fontSize: '.84rem', lineHeight: 1.6, maxWidth: 340 }}>This is a moment of noticing, not a verdict. Your answers are stored privately and can only be shared through your choices.</p>{safety === 'Yes' && <div className="alert-card" style={{ marginTop: '1.3rem' }}><div style={{ display: 'flex', gap: '.65rem' }}><Phone size={18} /><div><strong style={{ fontSize: '.85rem' }}>You may need immediate support.</strong><p style={{ fontSize: '.74rem', lineHeight: 1.5, margin: '.35rem 0 .8rem' }}>Thank you for saying so. MCI is not an emergency service. Contact local emergency services or a trusted person near you now if you may be in immediate danger.</p><Link href="/support" className="secondary-button" style={{ textDecoration: 'none' }} data-testid="link-crisis-support">Open immediate support options <ArrowRight size={14} /></Link></div></div></div>}<div style={{ display: 'flex', gap: '.65rem', marginTop: '1.6rem' }}><Link href="/" className="primary-button" style={{ textDecoration: 'none' }} data-testid="link-checkin-home">Back home</Link><Link href="/wellness" className="secondary-button" style={{ textDecoration: 'none' }} data-testid="link-checkin-wellness">Find a next step</Link></div></div></StudentShell>;
 
   return (
     <StudentShell>
       <div className="animate-rise">
         <Link href="/" className="ghost-button" style={{ paddingLeft: 0, textDecoration: 'none' }} data-testid="link-checkin-back"><ArrowLeft size={15} /> Back</Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', margin: '1.2rem 0 .7rem' }}><div><div className="eyebrow">Private check-in</div><h1 className="display" style={{ fontSize: '1.8rem', margin: '.3rem 0 0' }}>A pause, together.</h1></div><span className="muted" style={{ fontSize: '.72rem' }}>Step {step} of 3</span></div>
-        <div className="progress-track"><span style={{ width: `${(step / 3) * 100}%` }} /></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', margin: '1.2rem 0 .7rem' }}><div><div className="eyebrow">Private check-in</div><h1 className="display" style={{ fontSize: '1.8rem', margin: '.3rem 0 0' }}>A pause, together.</h1></div><span className="muted" style={{ fontSize: '.72rem' }}>Step {step} of 5</span></div>
+        <div className="progress-track"><span style={{ width: `${(step / 5) * 100}%` }} /></div>
         <p className="muted" style={{ fontSize: '.75rem', lineHeight: 1.5, margin: '.8rem 0 1.4rem' }}>There are no right answers. Choose what is closest, or skip this for now.</p>
       </div>
       {step === 1 && <CheckinChoice title="How has your mood been landing today?" choices={moodChoices} value={mood} setValue={setMood} testPrefix="mood" />}
-      {step === 2 && <CheckinChoice title="How much energy is available to you?" choices={energyChoices} value={energy} setValue={setEnergy} testPrefix="energy" />}
-      {step === 3 && <div className="animate-rise"><h2 className="display" style={{ fontSize: '1.42rem', margin: '0 0 .45rem' }}>Before you go — how safe do you feel right now?</h2><p className="muted" style={{ fontSize: '.75rem', lineHeight: 1.5 }}>This helps us show the right kind of support. It does not diagnose anything or alert anyone automatically.</p><div className="choice-grid" style={{ marginTop: '1.15rem' }}><button className={`choice ${safety === 'No' ? 'selected' : ''}`} onClick={() => setSafety('No')} data-testid="button-safety-no"><strong>Safe enough for now</strong><span>I can take my next step</span></button><button className={`choice ${safety === 'Yes' ? 'selected' : ''}`} onClick={() => setSafety('Yes')} data-testid="button-safety-yes"><strong>I may not be safe</strong><span>I need human support now</span></button></div>{safety === 'Yes' && <div className="alert-card" style={{ marginTop: '1rem' }}><div style={{ display: 'flex', gap: '.55rem', alignItems: 'start' }}><Info size={16} /><span style={{ fontSize: '.73rem', lineHeight: 1.5 }}>Thank you for saying so. We will show immediate support options after you save this check-in. If there is immediate danger, contact local emergency services now.</span></div></div>}</div>}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.7rem', marginTop: '2rem' }}>{step > 1 ? <button className="secondary-button" onClick={() => setStep(step - 1)} data-testid="button-checkin-previous"><ArrowLeft size={14} /> Previous</button> : <span />}{step < 3 ? <button className="primary-button" disabled={step === 1 ? !mood : !energy} onClick={() => setStep(step + 1)} data-testid="button-checkin-next">Continue <ArrowRight size={14} /></button> : <button className="primary-button" disabled={!safety || today} onClick={complete} data-testid="button-complete-checkin">{today ? 'Saved for today' : 'Save check-in'} <Check size={14} /></button>}</div>
+      {step === 2 && <CheckinChoice title="How much stress have you been carrying?" choices={stressChoices} value={stress} setValue={setStress} testPrefix="stress" />}
+      {step === 3 && <CheckinChoice title="How has your sleep been recently?" choices={sleepChoices} value={sleep} setValue={setSleep} testPrefix="sleep" />}
+      {step === 4 && <CheckinChoice title="How much energy is available to you?" choices={energyChoices} value={energy} setValue={setEnergy} testPrefix="energy" />}
+      {step === 5 && <div className="animate-rise"><h2 className="display" style={{ fontSize: '1.42rem', margin: '0 0 .45rem' }}>Before you go — how safe do you feel right now?</h2><p className="muted" style={{ fontSize: '.75rem', lineHeight: 1.5 }}>This helps us show the right kind of support. It does not diagnose anything. If you choose that you may not be safe, the next screen will put human support first.</p><div className="choice-grid" style={{ marginTop: '1.15rem' }}><button className={`choice ${safety === 'No' ? 'selected' : ''}`} onClick={() => setSafety('No')} data-testid="button-safety-no"><strong>Safe enough for now</strong><span>I can take my next step</span></button><button className={`choice ${safety === 'Yes' ? 'selected' : ''}`} onClick={() => setSafety('Yes')} data-testid="button-safety-yes"><strong>I may not be safe</strong><span>I need human support now</span></button></div>{safety === 'Yes' && <div className="alert-card" style={{ marginTop: '1rem' }}><div style={{ display: 'flex', gap: '.55rem', alignItems: 'start' }}><Info size={16} /><span style={{ fontSize: '.73rem', lineHeight: 1.5 }}>You are not alone. We will show configured emergency, crisis, trusted-person, and campus support options immediately after this check-in.</span></div></div>}</div>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.7rem', marginTop: '2rem' }}>{step > 1 ? <button className="secondary-button" onClick={() => setStep(step - 1)} data-testid="button-checkin-previous"><ArrowLeft size={14} /> Previous</button> : <span />}{step < 5 ? <button className="primary-button" disabled={step === 1 ? !mood : step === 2 ? !stress : step === 3 ? !sleep : !energy} onClick={() => setStep(step + 1)} data-testid="button-checkin-next">Continue <ArrowRight size={14} /></button> : <button className="primary-button" disabled={!safety || today} onClick={complete} data-testid="button-complete-checkin">{today ? 'Saved for today' : 'Save check-in'} <Check size={14} /></button>}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginTop: '2rem', color: 'hsl(var(--muted-foreground))', fontSize: '.67rem' }}><LockKeyhole size={13} /> Stored on this demo device. You control what is shared.</div>
     </StudentShell>
   );
@@ -340,8 +387,9 @@ function SupportPage() {
   const { state, updateState, notify } = useApp();
   const [, navigate] = useLocation();
   const [message, setMessage] = useState('');
+  const [urgent, setUrgent] = useState(false);
   const request = () => { updateState({ peerRequested: true }); notify('Peer support request sent'); };
-  return <StudentShell><div className="animate-rise"><div className="eyebrow">Human support</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .55rem' }}>You do not have<br />to figure it out alone.</h1><p className="muted" style={{ fontSize: '.8rem', lineHeight: 1.55 }}>Choose the kind of support that feels right. MCI is private and non-diagnostic; people, not scores, are here to help.</p></div><div className="section-heading"><h2>Right now</h2></div><div className="alert-card"><div style={{ display: 'flex', gap: '.7rem' }}><Phone size={19} /><div><strong style={{ fontSize: '.85rem' }}>If you may be in immediate danger</strong><p style={{ fontSize: '.74rem', lineHeight: 1.5, margin: '.3rem 0 .8rem' }}>Contact local emergency services or a trusted person near you now. You deserve immediate, human help.</p><button className="secondary-button" onClick={() => notify('In a real deployment, this opens local emergency guidance')} data-testid="button-emergency-guidance">Show emergency guidance</button></div></div></div><div className="section-heading"><h2>Choose a next connection</h2></div><div className="card" style={{ padding: '.2rem 1rem' }}><SupportOption icon={HeartHandshake} title="Request a peer guide" detail="A trained student can help you find your next step." action={state.peerRequested ? 'Request sent' : 'Request support'} onClick={request} disabled={state.peerRequested} testId="button-request-peer" /><SupportOption icon={MessageCircle} title="Talk with campus support" detail="Find counseling, accessibility, or academic support." action="Browse directory" onClick={() => notify('Campus directory opened for this demo')} testId="button-open-directory" /><SupportOption icon={UsersRound} title="Find a low-pressure space" detail="Explore drop-ins, groups, and community events." action="View community" onClick={() => navigate('/community')} testId="button-support-community" /></div><div className="section-heading"><h2>Tell us what would help</h2></div><div className="card-flat" style={{ padding: '1rem' }}><label htmlFor="support-message" className="eyebrow">Optional note</label><textarea id="support-message" className="input-field" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="A sentence is enough. Avoid sharing anything you would not want stored on this demo device." rows={3} style={{ marginTop: '.55rem', resize: 'vertical' }} data-testid="input-support-message" /><button className="primary-button" style={{ marginTop: '.7rem' }} onClick={() => { setMessage(''); notify('Your note was kept private in this demo'); }} data-testid="button-save-support-note">Save note privately <LockKeyhole size={14} /></button></div></StudentShell>;
+  return <StudentShell><div className="animate-rise"><div className="eyebrow">Human support</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .55rem' }}>You do not have<br />to figure it out alone.</h1><p className="muted" style={{ fontSize: '.8rem', lineHeight: 1.55 }}>Choose the kind of support that feels right. MCI is private and non-diagnostic; people, not scores, are here to help.</p></div><div className="section-heading"><h2>Right now</h2></div><div className="alert-card"><div style={{ display: 'flex', gap: '.7rem' }}><Phone size={19} /><div><strong style={{ fontSize: '.85rem' }}>If you may be in immediate danger</strong><p style={{ fontSize: '.74rem', lineHeight: 1.5, margin: '.3rem 0 .8rem' }}>You are not alone. Use the configured emergency or crisis contact for your campus, or reach a trusted person near you now.</p><button className="secondary-button" onClick={() => setUrgent((value) => !value)} data-testid="button-emergency-guidance">{urgent ? 'Hide emergency guidance' : 'Show emergency guidance'}</button></div></div></div>{urgent && <div className="alert-card" style={{ marginTop: '.7rem', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }} data-testid="card-emergency-guidance"><strong style={{ fontSize: '.84rem' }}>Immediate support options</strong><p className="muted" style={{ fontSize: '.73rem', lineHeight: 1.5, margin: '.35rem 0 .8rem' }}>This prototype uses institution-configured contacts. In production, these buttons will call or message the campus emergency service, crisis helpline, trusted person, or on-call support team.</p><div style={{ display: 'grid', gap: '.55rem' }}><button className="primary-button" onClick={() => notify('Campus emergency contact selected')} data-testid="button-call-campus-emergency"><Phone size={14} /> Call campus emergency</button><button className="secondary-button" onClick={() => notify('Trusted person contact selected')} data-testid="button-contact-trusted-person"><UsersRound size={14} /> Contact trusted person</button><button className="ghost-button" onClick={() => notify('Configured crisis resources opened')} data-testid="button-open-crisis-resources">Open configured crisis resources <ArrowRight size={14} /></button></div></div>}<div className="section-heading"><h2>Choose a next connection</h2></div><div className="card" style={{ padding: '.2rem 1rem' }}><SupportOption icon={HeartHandshake} title="Request a peer guide" detail="A trained student can help you find your next step." action={state.peerRequested ? 'Request sent' : 'Request support'} onClick={request} disabled={state.peerRequested} testId="button-request-peer" /><SupportOption icon={MessageCircle} title="Talk with campus support" detail="Find counseling, accessibility, or academic support." action="Browse directory" onClick={() => notify('Campus directory opened for this demo')} testId="button-open-directory" /><SupportOption icon={UsersRound} title="Find a low-pressure space" detail="Explore drop-ins, groups, and community events." action="View community" onClick={() => navigate('/community')} testId="button-support-community" /></div><div className="section-heading"><h2>Tell us what would help</h2></div><div className="card-flat" style={{ padding: '1rem' }}><label htmlFor="support-message" className="eyebrow">Optional note</label><textarea id="support-message" className="input-field" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="A sentence is enough. Avoid sharing anything you would not want stored on this demo device." rows={3} style={{ marginTop: '.55rem', resize: 'vertical' }} data-testid="input-support-message" /><button className="primary-button" style={{ marginTop: '.7rem' }} onClick={() => { setMessage(''); notify('Your note was kept private in this demo'); }} data-testid="button-save-support-note">Save note privately <LockKeyhole size={14} /></button></div></StudentShell>;
 }
 
 function SupportOption({ icon: Icon, title, detail, action, onClick, disabled, testId }: { icon: typeof HeartHandshake; title: string; detail: string; action: string; onClick: () => void; disabled?: boolean; testId: string }) {
@@ -410,7 +458,7 @@ function AdminSecurity() {
 }
 
 function Router() {
-  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityPage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
+  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityPage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin/login" component={AdminLogin} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
