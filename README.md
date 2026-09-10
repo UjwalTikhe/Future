@@ -88,6 +88,8 @@ The staff workspace currently includes:
 - Security and audit views
 - Staff sign-out
 
+The community requires a student account. Students create a pseudonymous username, choose interests for room suggestions, join communities explicitly, and can create public or private communities. Private communities require the host to approve join requests. Each community starts with separate `General` and `Introductions` channels.
+
 ## Useful Commands
 
 Run the full typecheck:
@@ -113,6 +115,7 @@ http://localhost:3001/api/healthz
 ## Important MVP Notes
 
 - The current staff session store lives in backend memory. Restarting the API signs staff out.
+- Student accounts, community memberships, channels, messages, reactions, and reports require `DATABASE_URL` and are stored in Postgres.
 - Before a real public launch, move staff users and sessions into PostgreSQL or connect a university identity provider.
 - Never commit a real `.env` file or real passwords. `.env.example` is safe to commit.
 - The backend requires a real `ADMIN_EMAIL` and `ADMIN_PASSWORD` every time it starts.
