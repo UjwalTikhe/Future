@@ -63,6 +63,14 @@ function hashPassword(password: string) {
   return scryptSync(password, process.env.ADMIN_PASSWORD_SALT ?? "mindful-campus-student-salt", 32).toString("hex");
 }
 
+function passwordHashMatches(storedHex: string | null | undefined, password: string) {
+  if (!storedHex) return false;
+  const expected = Buffer.from(storedHex, "hex");
+  const received = Buffer.from(hashPassword(password), "hex");
+  if (expected.length === 0 || expected.length !== received.length) return false;
+  return timingSafeEqual(expected, received);
+}
+
 function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
 
 function studentCookieOptions() { return { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", maxAge: STUDENT_TTL_MS, path: "/" }; }
@@ -112,11 +120,21 @@ router.post("/auth/student/register", async (req, res) => {
   if (!email || !username || password.length < 8) { res.status(400).json({ message: "Use a valid email, username, and 8-character password." }); return; }
   const db = await database();
   if (!db) { res.status(503).json({ message: "Student accounts need the database to be connected." }); return; }
+  await ensureStudentSchema(db);
   try {
     const user = (await db.insert(communityUsers).values({ email, username, passwordHash: hashPassword(password), interests }).returning({ id: communityUsers.id, username: communityUsers.username, email: communityUsers.email, interests: communityUsers.interests, bio: communityUsers.bio }))[0];
     await setStudentSession(user.id, res);
     res.status(201).json({ authenticated: true, user });
-  } catch { res.status(409).json({ message: "That email or username is already in use." }); }
+  } catch (error: unknown) {
+    const code = (error as { code?: string; cause?: { code?: string } })?.code
+      ?? (error as { cause?: { code?: string } })?.cause?.code;
+    if (code === "23505") {
+      res.status(409).json({ message: "That email or username is already in use." });
+      return;
+    }
+    console.error("student register failed", error);
+    res.status(500).json({ message: "Could not create your account. Please try again." });
+  }
 });
 
 router.post("/auth/student/login", async (req, res) => {
@@ -125,9 +143,8 @@ router.post("/auth/student/login", async (req, res) => {
   const db = await database();
   if (!db) { res.status(503).json({ message: "Student accounts need the database to be connected." }); return; }
   await ensureStudentSchema(db);
-  await ensureStudentSchema(db);
   const user = (await db.select().from(communityUsers).where(eq(communityUsers.email, email)).limit(1))[0];
-  if (!user || !timingSafeEqual(Buffer.from(user.passwordHash, "hex"), Buffer.from(hashPassword(password), "hex"))) { res.status(401).json({ message: "Email or password is incorrect." }); return; }
+  if (!user || !passwordHashMatches(user.passwordHash, password)) { res.status(401).json({ message: "Email or password is incorrect." }); return; }
   await setStudentSession(user.id, res);
   res.json({ authenticated: true, user: { id: user.id, username: user.username, email: user.email, interests: user.interests, bio: user.bio } });
 });
