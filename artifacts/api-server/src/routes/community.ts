@@ -73,6 +73,25 @@ router.get("/community/rooms/:slug/messages", async (req, res) => {
   res.json(rows.map((row) => ({ ...row, reactions: Number(row.reactions) })).reverse());
 });
 
+router.post("/community/rooms", async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 60) : "";
+  const description = typeof req.body?.description === "string" ? req.body.description.trim().slice(0, 180) : "";
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+  if (!name || !slug || !description) { res.status(400).json({ message: "A room name and description are required." }); return; }
+  const db = await database();
+  if (!db) {
+    if (fallbackRooms.some((room) => room.slug === slug)) { res.status(409).json({ message: "A room with that name already exists." }); return; }
+    const room = { id: `room-${Date.now()}`, slug, name, description, accent: "sage", memberCount: 1 };
+    fallbackRooms.push(room);
+    res.status(201).json(room); return;
+  }
+  await seed(db);
+  const existing = await db.select().from(communityRooms).where(eq(communityRooms.slug, slug)).limit(1);
+  if (existing.length) { res.status(409).json({ message: "A room with that name already exists." }); return; }
+  const room = (await db.insert(communityRooms).values({ slug, name, description }).returning())[0];
+  res.status(201).json({ ...room, memberCount: 1 });
+});
+
 router.post("/community/rooms/:slug/messages", async (req, res) => {
   const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
   if (!content || content.length > 2000) { res.status(400).json({ message: "Messages must contain between 1 and 2000 characters." }); return; }
