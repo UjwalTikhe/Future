@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mindful Campus Initiative"
+description = "A mobile-first campus well-being and early-support experience for students, paired with an administrator dashboard for anonymized insights, support cases, and privacy-preserving security auditing."
+version = "1.0.0"
+id = "artifacts/mindful-campus"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23354
+
+[services.development]
+run = "pnpm --filter @workspace/mindful-campus run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mindful-campus", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mindful-campus/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23354"
+BASE_PATH = "/"
