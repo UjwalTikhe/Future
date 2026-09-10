@@ -392,6 +392,74 @@ function CommunityPage() {
   return <StudentShell><div className="animate-rise"><div className="eyebrow">Campus, at a human pace</div><h1 className="display" style={{ fontSize: '2rem', margin: '.35rem 0 .55rem' }}>Find your people,<br />not another obligation.</h1><p className="muted" style={{ fontSize: '.8rem', lineHeight: 1.55 }}>Low-pressure gatherings and useful places to land. Browse quietly or show up.</p></div><div className="section-heading"><h2>Next on campus</h2><span className="mini-label">3 opportunities</span></div><div className="hero-card" style={{ background: 'hsl(27 61% 68%)', color: 'hsl(157 33% 21%)' }}><div className="pill" style={{ background: 'hsl(43 38% 95% / .45)', color: 'hsl(157 33% 21%)' }}><CalendarDays size={13} /> Today · 4:30 PM</div><h2 className="display" style={{ fontSize: '1.65rem', margin: '1rem 0 .45rem' }}>Well-being Hour</h2><p style={{ fontSize: '.78rem', lineHeight: 1.5, opacity: .78, maxWidth: 300, margin: 0 }}>Garden room · drop-in · hosted by student peer guides</p><button className="primary-button" style={{ marginTop: '1.15rem', background: 'hsl(157 33% 24%)', color: 'hsl(43 38% 95%)' }} onClick={register} data-testid="button-register-event">{state.registeredEvent ? <><Check size={14} /> Registered</> : <>Save my place <ArrowRight size={14} /></>}</button></div><div className="card-flat" style={{ marginTop: '.8rem', padding: '1rem' }}><div style={{ display: 'flex', gap: '.75rem' }}><div style={{ color: 'hsl(var(--primary))' }}><BookOpen size={18} /></div><div><div className="pill" style={{ background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}>Tomorrow · 12:15 PM</div><div style={{ fontFamily: 'var(--app-font-serif)', fontSize: '1.05rem', marginTop: '.55rem' }}>Study beside someone</div><p className="muted" style={{ fontSize: '.72rem', margin: '.25rem 0 .8rem' }}>Library east terrace · bring whatever you are working on</p><button className="ghost-button" style={{ paddingLeft: 0 }} onClick={() => notify('Event details saved for later')} data-testid="button-save-study-event">Save for later <ArrowRight size={14} /></button></div></div></div><div className="section-heading"><h2>People-powered support</h2></div><div className="card" style={{ padding: '1rem' }}><div style={{ display: 'flex', gap: '.7rem' }}><div style={{ width: 38, height: 38, display: 'grid', placeItems: 'center', borderRadius: '.7rem', background: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}><HeartHandshake size={18} /></div><div><strong style={{ fontSize: '.84rem' }}>Peer guides are students too.</strong><p className="muted" style={{ fontSize: '.72rem', lineHeight: 1.5, margin: '.3rem 0 0' }}>Ask for a listening ear, help finding campus services, or just a place to start.</p></div></div></div></StudentShell>;
 }
 
+type LiveRoom = { id: string; slug: string; name: string; description: string; accent: string; memberCount: number };
+type LiveMessage = { id: string; username: string; content: string; createdAt: string; reactions: number; replyCount: number };
+
+function CommunityLivePage() {
+  const { notify } = useApp();
+  const [rooms, setRooms] = useState<LiveRoom[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<LiveRoom | null>(null);
+  const [messages, setMessages] = useState<LiveMessage[]>([]);
+  const [username, setUsername] = useState('');
+  const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadMessages = async (room: LiveRoom) => {
+    setSelectedRoom(room);
+    const response = await fetch(`/api/community/rooms/${room.slug}/messages`, { credentials: 'include' });
+    if (!response.ok) throw new Error('Could not load this room.');
+    setMessages(await response.json());
+  };
+
+  useEffect(() => {
+    Promise.all([fetch('/api/community/rooms', { credentials: 'include' }), fetch('/api/community/identity', { credentials: 'include' })])
+      .then(async ([roomsResponse, identityResponse]) => {
+        if (!roomsResponse.ok || !identityResponse.ok) throw new Error('Community service is unavailable.');
+        const nextRooms: LiveRoom[] = await roomsResponse.json();
+        const identity = await identityResponse.json();
+        setRooms(nextRooms);
+        setUsername(identity.username);
+        if (nextRooms[0]) await loadMessages(nextRooms[0]);
+      })
+      .catch((reason: Error) => setError(reason.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const chooseRoom = async (room: LiveRoom) => {
+    try { await loadMessages(room); } catch { setError('Could not load this room.'); }
+  };
+
+  const sendMessage = async () => {
+    if (!selectedRoom || !draft.trim() || sending) return;
+    setSending(true);
+    try {
+      const response = await fetch(`/api/community/rooms/${selectedRoom.slug}/messages`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: draft.trim() }) });
+      const message = await response.json();
+      if (!response.ok) throw new Error(message.message ?? 'Message could not be sent.');
+      setMessages((current) => [...current, message]);
+      setDraft('');
+    } catch (reason) { notify(reason instanceof Error ? reason.message : 'Message could not be sent.'); }
+    finally { setSending(false); }
+  };
+
+  const react = async (message: LiveMessage) => {
+    await fetch(`/api/community/messages/${message.id}/react`, { method: 'POST', credentials: 'include' });
+    setMessages((current) => current.map((item) => item.id === message.id ? { ...item, reactions: item.reactions + 1 } : item));
+  };
+
+  const report = async (message: LiveMessage) => {
+    await fetch(`/api/community/messages/${message.id}/report`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Reported by a community member' }) });
+    notify('Thanks. The community team will review this message.');
+  };
+
+  if (loading) return <StudentShell><div className="community-loading"><Sprout size={22} /><span>Opening your community...</span></div></StudentShell>;
+  if (error) return <StudentShell><div className="community-error card"><ShieldCheck size={22} /><h1 className="display">Community is taking a pause.</h1><p>{error}</p><button className="primary-button" onClick={() => window.location.reload()}>Try again <RefreshCw size={14} /></button></div></StudentShell>;
+
+  return <StudentShell><div className="live-community"><div className="live-community-head"><div><div className="eyebrow">Campus community</div><h1 className="display">A place to find your people.</h1><p className="muted">Pseudonymous rooms for interests, questions, and everyday campus life.</p></div><div className="community-privacy"><ShieldCheck size={16} /><span>Public as {username}</span></div></div><div className="chat-shell"><aside className="room-rail"><div className="room-rail-title"><span>Your rooms</span><button className="icon-button small-icon" aria-label="Create a room" onClick={() => notify('Room creation is coming next')}><Plus size={15} /></button></div>{rooms.map((room) => <button key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`} onClick={() => chooseRoom(room)}><span className={`room-dot room-dot-${room.accent}`} /><span><strong>{room.name}</strong><small>{room.memberCount} members</small></span></button>)}<div className="room-rail-note"><LockKeyhole size={14} /><span>Your real identity never appears in rooms.</span></div></aside><section className="chat-main"><header className="chat-header"><div><div className="chat-room-name"><span>#</span> {selectedRoom?.name}</div><div className="muted">{selectedRoom?.description}</div></div><div className="chat-header-meta"><UsersRound size={15} /> {selectedRoom?.memberCount}</div></header><div className="message-list">{messages.length ? messages.map((message) => <article className="chat-message" key={message.id}><div className="message-avatar">{message.username.slice(0, 2).toUpperCase()}</div><div className="message-body"><div><strong>{message.username}</strong><span className="muted message-time">{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><p>{message.content}</p><div className="message-actions"><button onClick={() => react(message)}><HeartHandshake size={13} /> {message.reactions}</button><button onClick={() => notify('Thread replies are next in the community build')}><MessageCircle size={13} /> {message.replyCount || 'Reply'}</button><button onClick={() => report(message)} aria-label={`Report message from ${message.username}`}><ShieldCheck size={13} /> Report</button></div></div></article>) : <div className="chat-empty"><MessageCircle size={24} /><h2 className="display">Start the conversation.</h2><p>Be the first person to say hello in this room.</p></div>}</div><div className="chat-composer"><div className="message-avatar composer-avatar">{username.slice(0, 2).toUpperCase()}</div><div className="composer-input"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} placeholder={`Message #${selectedRoom?.name ?? 'community'}`} aria-label="Write a chat message" maxLength={2000} data-testid="input-chat-message" /><div><span className="mini-label">Shift + Enter for a new line · 2,000 characters max</span><button className="primary-button" onClick={sendMessage} disabled={!draft.trim() || sending} data-testid="button-send-chat">{sending ? 'Sending...' : 'Send'} <ArrowRight size={14} /></button></div></div></div></section></div></div></StudentShell>;
+}
+
 function CommunityHubPage() {
   const { state, updateState, notify } = useApp();
   const [activeCircle, setActiveCircle] = useState('All circles');
@@ -496,7 +564,7 @@ function AdminSecurity() {
 }
 
 function Router() {
-  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityHubPage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin/login" component={AdminLogin} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
+  return <AppProvider><RoutedErrorBoundary><Switch><Route path="/" component={StudentHome} /><Route path="/check-in" component={CheckInPage} /><Route path="/wellness" component={WellnessPage} /><Route path="/community" component={CommunityLivePage} /><Route path="/support" component={SupportPage} /><Route path="/profile" component={ProfilePage} /><Route path="/admin/login" component={AdminLogin} /><Route path="/admin" component={AdminOverview} /><Route path="/admin/cases" component={AdminCases} /><Route path="/admin/programs" component={AdminPrograms} /><Route path="/admin/security" component={AdminSecurity} /><Route component={NotFound} /></Switch></RoutedErrorBoundary></AppProvider>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {

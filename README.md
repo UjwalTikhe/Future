@@ -131,8 +131,9 @@ The included `Dockerfile` and `render.yaml` deploy the frontend and backend as o
 	- `ADMIN_EMAIL`: your staff email
 	- `ADMIN_PASSWORD`: a long private password
 	- `WEB_ORIGIN`: the Render URL, for example `https://mindful-campus.onrender.com`
-6. Deploy and wait for the build to finish.
-7. Open the Render URL on your phone.
+6. Render also provisions `mindful-campus-db` for persistent rooms and messages.
+7. Deploy and wait for the build to finish.
+8. Open the Render URL on your phone.
 
 Test these URLs after deployment:
 
@@ -143,7 +144,7 @@ https://YOUR-APP.onrender.com/admin
 https://YOUR-APP.onrender.com/api/healthz
 ```
 
-The free Render service may sleep when unused. The first request after sleep can take a little longer. The app currently keeps sessions in memory, so a service restart signs staff out.
+The free Render service may sleep when unused. The first request after sleep can take a little longer. Staff sessions remain process-local, so a web service restart signs staff out; community rooms and messages persist in Postgres.
 
 ## GitHub
 
